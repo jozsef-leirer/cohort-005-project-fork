@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { eq, gte, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
+import { and, eq, gte, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import type { SQLiteTable } from "drizzle-orm/sqlite-core";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
@@ -11,6 +11,7 @@ import {
   CourseStatus,
   LessonProgressStatus,
   QuestionType,
+  RefundRequestStatus,
   TeamMemberRole,
 } from "../app/db/schema";
 
@@ -76,7 +77,7 @@ async function seed() {
     DROP TABLE IF EXISTS coupons;
     DROP TABLE IF EXISTS team_members;
     DROP TABLE IF EXISTS teams;
-    DROP TABLE IF EXISTS refunds;
+    DROP TABLE IF EXISTS refund_requests;
     DROP TABLE IF EXISTS purchases;
     DROP TABLE IF EXISTS enrollments;
     DROP TABLE IF EXISTS lessons;
@@ -2278,6 +2279,57 @@ This course is still in draft while the cluster examples are rewritten against t
 
   console.log(`Created ${countRows(schema.purchases)} individual purchases.`);
 
+  // ─── Refund requests ───
+  // One in each state, so the admin review page has something to review and
+  // the learner's settings page shows what a resolved request looks like.
+  const sophiaPurchase = db
+    .select()
+    .from(schema.purchases)
+    .where(
+      and(
+        eq(schema.purchases.userId, students[4].id),
+        eq(schema.purchases.courseId, course1.id)
+      )
+    )
+    .get();
+
+  const emmaPurchase = db
+    .select()
+    .from(schema.purchases)
+    .where(eq(schema.purchases.userId, students[0].id))
+    .get();
+
+  if (sophiaPurchase) {
+    db.insert(schema.refundRequests)
+      .values({
+        purchaseId: sophiaPurchase.id,
+        status: RefundRequestStatus.AwaitingReview,
+        reason:
+          "The course is good but it is pitched well above where I am — I could not follow module two at all.",
+        requestedAt: daysAgo(2),
+      })
+      .run();
+  }
+
+  if (emmaPurchase) {
+    db.insert(schema.refundRequests)
+      .values({
+        purchaseId: emmaPurchase.id,
+        status: RefundRequestStatus.Declined,
+        reason: "Changed my mind about learning this.",
+        declineReason:
+          "You finished eleven of the fourteen lessons before asking, which is past the point where we can refund a course.",
+        requestedAt: daysAgo(40),
+        resolvedAt: daysAgo(39),
+        resolvedByUserId: admin.id,
+      })
+      .run();
+  }
+
+  console.log(
+    `Created ${countRows(schema.refundRequests)} refund requests.`
+  );
+
   // ─── Teams, Team Members, and Coupons ───
   // Bossy McBossface bought 5 team seats for course 2; Olivia and Liam redeemed coupons
 
@@ -2776,6 +2828,9 @@ This course is still in draft while the cluster examples are rewritten against t
   );
   console.log(
     `  Teams: ${countRows(schema.teams)}, coupons: ${countRows(schema.coupons)} (${countRows(schema.coupons, isNotNull(schema.coupons.redeemedByUserId))} redeemed)`
+  );
+  console.log(
+    `  Refund requests: ${countRows(schema.refundRequests)} (${countRows(schema.refundRequests, eq(schema.refundRequests.status, RefundRequestStatus.AwaitingReview))} awaiting review)`
   );
 }
 

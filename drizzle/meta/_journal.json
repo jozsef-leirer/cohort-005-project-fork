@@ -71,6 +71,27 @@
       "when": 1790083397130,
       "tag": "0009_clear_professor_monster",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1794348051419,
+      "tag": "0010_ancient_newton_destine",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1794348057485,
+      "tag": "0011_slim_iron_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1794348461315,
+      "tag": "0012_woozy_darwin",
+      "breakpoints": true
     }
   ]
 }

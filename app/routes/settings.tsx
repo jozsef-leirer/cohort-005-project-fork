@@ -12,17 +12,31 @@ import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import {
   UserRole,
-  RefundStatus,
+  RefundRequestStatus,
   users,
   courses,
   purchases,
-  refunds,
+  refundRequests,
 } from "~/db/schema";
 import { AlertTriangle } from "lucide-react";
 import { data, isRouteErrorResponse, Link } from "react-router";
 import { db } from "~/db";
-import { and, eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { formatPrice } from "~/lib/utils";
+
+const STATUS_LABELS: Record<RefundRequestStatus, string> = {
+  [RefundRequestStatus.AwaitingReview]: "Awaiting review",
+  [RefundRequestStatus.Approved]: "Approved",
+  [RefundRequestStatus.Declined]: "Declined",
+};
+
+const STATUS_CLASSES: Record<RefundRequestStatus, string> = {
+  [RefundRequestStatus.AwaitingReview]:
+    "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  [RefundRequestStatus.Approved]:
+    "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+  [RefundRequestStatus.Declined]: "bg-muted text-muted-foreground",
+};
 
 const settingsSchema = z.object({
   name: z.string().trim().min(1, "Name cannot be empty."),
@@ -55,24 +69,25 @@ export async function loader({ request }: Route.LoaderArgs) {
     throw data("User not found.", { status: 404 });
   }
 
-  const pendingChargebacks = db
+  // Every request, not just the open ones. A declined request that silently
+  // vanished is what sends a learner to their bank instead.
+  const myRefundRequests = db
     .select({
-      id: refunds.id,
+      id: refundRequests.id,
       courseTitle: courses.title,
       courseSlug: courses.slug,
       amountPaid: purchases.amountPaid,
-      reason: refunds.reason,
-      requestedAt: refunds.requestedAt,
+      status: refundRequests.status,
+      reason: refundRequests.reason,
+      declineReason: refundRequests.declineReason,
+      requestedAt: refundRequests.requestedAt,
+      resolvedAt: refundRequests.resolvedAt,
     })
-    .from(refunds)
-    .innerJoin(purchases, eq(refunds.purchaseId, purchases.id))
+    .from(refundRequests)
+    .innerJoin(purchases, eq(refundRequests.purchaseId, purchases.id))
     .innerJoin(courses, eq(purchases.courseId, courses.id))
-    .where(
-      and(
-        eq(purchases.userId, currentUserId),
-        eq(refunds.status, RefundStatus.Requested)
-      )
-    )
+    .where(eq(purchases.userId, currentUserId))
+    .orderBy(sql`${refundRequests.requestedAt} desc`)
     .all();
 
   return {
@@ -83,7 +98,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       bio: currentUser.bio,
       role: currentUser.role,
     },
-    pendingChargebacks,
+    myRefundRequests,
   };
 }
 
@@ -122,7 +137,10 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Settings({ loaderData }: Route.ComponentProps) {
-  const { user, pendingChargebacks } = loaderData;
+  const { user, myRefundRequests } = loaderData;
+  const awaitingReviewCount = myRefundRequests.filter(
+    (r) => r.status === RefundRequestStatus.AwaitingReview
+  ).length;
   const fetcher = useFetcher();
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -209,35 +227,54 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
         </CardContent>
       </Card>
 
-      {pendingChargebacks.length > 0 && (
+      {myRefundRequests.length > 0 && (
         <Card className="mt-8 max-w-md">
           <CardHeader>
-            <h2 className="text-lg font-semibold">Pending Chargeback</h2>
+            <h2 className="text-lg font-semibold">Refund requests</h2>
             <p className="text-sm text-muted-foreground">
-              {pendingChargebacks.length === 1
-                ? "One chargeback is waiting on us."
-                : `${pendingChargebacks.length} chargebacks are waiting on us.`}
+              {awaitingReviewCount === 0
+                ? "Nothing is waiting on us."
+                : awaitingReviewCount === 1
+                  ? "One request is waiting for us to review it."
+                  : `${awaitingReviewCount} requests are waiting for us to review them.`}
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
-            {pendingChargebacks.map((chargeback) => (
-              <div key={chargeback.id} className="rounded-md border p-3">
+            {myRefundRequests.map((refundRequest) => (
+              <div key={refundRequest.id} className="rounded-md border p-3">
                 <div className="flex items-start justify-between gap-3">
                   <Link
-                    to={`/courses/${chargeback.courseSlug}`}
+                    to={`/courses/${refundRequest.courseSlug}`}
                     className="font-medium hover:underline"
                   >
-                    {chargeback.courseTitle}
+                    {refundRequest.courseTitle}
                   </Link>
-                  <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                    Pending Chargeback
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_CLASSES[refundRequest.status]}`}
+                  >
+                    {STATUS_LABELS[refundRequest.status]}
                   </span>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {formatPrice(chargeback.amountPaid)} · raised{" "}
-                  {new Date(chargeback.requestedAt).toLocaleDateString()}
+                  {formatPrice(refundRequest.amountPaid)} · asked for{" "}
+                  {new Date(refundRequest.requestedAt).toLocaleDateString()}
                 </p>
-                <p className="mt-2 text-sm">{chargeback.reason}</p>
+                <p className="mt-2 text-sm">{refundRequest.reason}</p>
+                {refundRequest.status === RefundRequestStatus.Approved && (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {formatPrice(refundRequest.amountPaid)} is on its way back
+                    to the card you paid with, and your access to this course
+                    has ended.
+                  </p>
+                )}
+                {refundRequest.declineReason && (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                      Why we could not approve this:{" "}
+                    </span>
+                    {refundRequest.declineReason}
+                  </p>
+                )}
               </div>
             ))}
           </CardContent>
