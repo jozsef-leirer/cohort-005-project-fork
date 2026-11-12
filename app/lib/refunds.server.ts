@@ -27,7 +27,8 @@ import {
 // ─── Refunds ───
 // Everything about Refund Requests: whether a Purchase may be refunded, raising
 // a Refund Request, and a Platform Admin deciding one. See GLOSSARY.md for the
-// language and docs/adr/0001–0004 for why it works the way it does.
+// language and the rules, and docs/adr/0001 and 0003 for why it works the way
+// it does.
 //
 // Every function takes the database first, so tests can hand in an in-memory
 // one. Uses positional parameters (project convention).
@@ -332,6 +333,10 @@ export function getRefundOffer(
     .orderBy(desc(purchases.createdAt), desc(purchases.id))
     .all();
 
+  // Load-bearing: a Refund Request belongs to one specific Purchase, so this
+  // must not return the buyer's newest Purchase of the course outright. A
+  // student who bought for themselves and then bought a Team Licence would
+  // refund the wrong one. Team Licences are refunded from the team page.
   const individualPurchase = newestFirst.find(
     (purchase) => kindOf(getSeats(db, purchase.id)) === "individual_purchase"
   );
@@ -605,9 +610,10 @@ function findOpenRefundRequest(
 /**
  * Approves an Open Refund Request and ends what its Purchase granted.
  *
- * - An Individual Purchase: the buyer loses their Enrollment, unless
- *   they also hold a Claimed Seat for the course (docs/adr/0004). Their progress stays
- *   (docs/adr/0001).
+ * - An Individual Purchase: the buyer loses their Enrollment, unless they also
+ *   hold a Claimed Seat for the course — an Enrollment is one per course and is
+ *   not tied to the Purchase that granted it, so the Seat still earns it. Their
+ *   progress stays (docs/adr/0001).
  * - A Team Licence: its Unclaimed Seats can never be claimed. Refused if any
  *   Seat has been claimed (docs/adr/0003).
  */

@@ -4,6 +4,7 @@ import { getSession } from "~/lib/session";
 // Layered approach: (1) dev session override, (2) CF-IPCountry header.
 // Returns a 2-letter ISO country code or null. Null prices at full price
 // (Tier 1): a page never waits on a network call to learn the country.
+// See docs/adr/0013 for why there is no geolocation lookup here.
 
 export async function resolveCountry(request: Request): Promise<string | null> {
   // 1. Dev session override

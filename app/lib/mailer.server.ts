@@ -4,7 +4,7 @@ import { join } from "node:path";
 // ─── Transactional email ───
 // Postmark delivers every email when POSTMARK_SERVER_TOKEN is set. Without a
 // token (local dev, tests) each message is written to .outbox/ as a JSON file
-// instead, so it can be read without sending anything.
+// instead, so it can be read without sending anything. See docs/adr/0012.
 
 export type Email = {
   to: string;
