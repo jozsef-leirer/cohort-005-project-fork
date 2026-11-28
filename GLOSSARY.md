@@ -106,9 +106,37 @@ _Avoid_: Watch cap, Viewing threshold
 ### Notifications
 
 **Notification**:
-A message Cadence sends a person to tell them something that concerns them has happened.
-_Avoid_: Alert, Message, Activity
+A durable record telling one person that something outside their own actions happened, worded once when it is fired and never reworded afterwards. A person never gets one for something they did themselves.
+_Avoid_: In-app notification, Alert, Message, Activity
+
+**Notification Type**:
+A kind of Notification: what triggers it, how it is worded, and the rule for whom it reaches. The catalogue is a list of these, not of individual Notifications.
+_Avoid_: Event, Template, Category
 
 **Notification Feed**:
-The place inside Cadence where a person sees their Notifications.
-_Avoid_: Inbox, Activity feed
+The place inside Cadence where a Recipient sees their Notifications, newest first. It shows every Notification ever sent to them, whether or not they can still reach what it is about.
+_Avoid_: Inbox, Activity feed, Notification centre
+
+**Recipient**:
+The one person a Notification is addressed to, always an existing Cadence user. A role decides who the Recipients are when a Notification is fired, but is not part of the Notification itself.
+_Avoid_: Audience, Target, Subscriber
+
+**Subject**:
+The one thing a Notification is about, such as a Refund Request or a Discussion Question. Every Notification has one, and it is where the Notification leads when opened.
+_Avoid_: Target, Entity, Resource
+
+**Actor**:
+The person whose action caused a Notification. Some Notification Types have no Actor, because nobody caused them.
+_Avoid_: Sender, Author, Trigger
+
+**Unread**:
+A Notification its Recipient has not opened yet, and which still counts towards the Notification Feed's count. Seeing it in the Notification Feed does not make it Read.
+_Avoid_: New, Seen, Unseen
+
+**Read**:
+A Notification its Recipient has opened, or has marked Read along with the rest. It cannot become Unread again.
+_Avoid_: Acknowledged, Dismissed, Archived
+
+**Toast**:
+A message that appears briefly to tell someone how their own action went, and is never stored or counted. The opposite of a Notification in both who it is for and how long it lasts.
+_Avoid_: In-app notification, Alert, Flash, Snackbar
